@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#17191a">
+  <meta name="description" content="A gentle tide gathers shells and stones into a heart on a black-sand shore.">
+  <title>How i picture that day</title>
+  <link rel="stylesheet" href="/theme.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    .beach-canvas {
+      position: absolute;
+      inset: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .glass-control {
+      background: color-mix(in srgb, var(--color-surface) 84%, transparent);
+      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(14px);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .motion-hint {
+        display: none;
+      }
+    }
+
+  </style>
+</head>
+
+<body class="min-h-screen">
+  <main class="relative h-[100svh] min-h-[480px] w-full overflow-hidden bg-[var(--color-ocean)]">
+    <canvas id="beach-canvas" class="beach-canvas" role="img" aria-label="Turquoise water rolls over black sand and recedes to reveal a heart made of shells and stones, with scattered lilies and roses.">
+    </canvas>
+
+    <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-[var(--color-text)]/10 via-transparent to-[var(--color-text)]/20" aria-hidden="true"></div>
+
+    <header class="absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-4 sm:p-8">
+      <a href="/" class="glass-control inline-flex items-center gap-2 rounded-[var(--radius)] border border-[var(--color-surface)]/50 px-4 py-3 text-sm font-bold text-[var(--color-text)] shadow-lg shadow-[var(--color-text)]/10 transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] sm:px-5">
+        <span aria-hidden="true">←</span>
+        <span>Back to my letter</span>
+      </a>
+      <div class="glass-control rounded-[var(--radius)] border border-[var(--color-surface)]/50 px-4 py-3 text-right shadow-lg shadow-[var(--color-text)]/10 sm:px-5">
+        <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--color-primary)] sm:text-xs">a memories of us</p>
+        <h1 class="mt-1 text-base text-[var(--color-text)] sm:text-xl">Moment that will be in my mind forever</h1>
+      </div>
+    </header>
+
+    <div class="absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-3 p-4 sm:p-8">
+      <p class="motion-hint max-w-[15rem] rounded-[var(--radius)] bg-[var(--color-text)]/35 px-4 py-3 text-xs leading-5 text-[var(--color-primary-contrast)] shadow-lg backdrop-blur-sm sm:max-w-xs sm:text-sm">
+        how i picture that day, 09 08 2026. <span aria-hidden="true">♥</span>
+      </p>
+      <button id="replay-button" type="button" class="glass-control inline-flex shrink-0 items-center gap-2 rounded-[var(--radius)] border border-[var(--color-surface)]/50 px-4 py-3 text-sm font-bold text-[var(--color-text)] shadow-lg shadow-[var(--color-text)]/10 transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] sm:px-5">
+        <span aria-hidden="true">↻</span>
+        <span>Replay animation</span>
+      </button>
+    </div>
+  </main>
+
+  <script>
+    const canvas = document.querySelector('#beach-canvas');
+    const context = canvas.getContext('2d');
+    const replayButton = document.querySelector('#replay-button');
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const theme = getComputedStyle(document.documentElement);
+    const colors = {
+      ocean: theme.getPropertyValue('--color-ocean').trim(),
+      deep: theme.getPropertyValue('--color-ocean-deep').trim(),
+      light: theme.getPropertyValue('--color-ocean-light').trim(),
+      sand: theme.getPropertyValue('--color-sand').trim(),
+      sandLight: theme.getPropertyValue('--color-sand-light').trim(),
+      foam: theme.getPropertyValue('--color-foam').trim(),
+      accent: theme.getPropertyValue('--color-primary').trim(),
+      text: theme.getPropertyValue('--color-text').trim(),
+      rose: theme.getPropertyValue('--color-flower-rose').trim(),
+      lily: theme.getPropertyValue('--color-flower-lily').trim(),
+      leaf: theme.getPropertyValue('--color-leaf').trim()
+    };
+
+    const cycleLength = 15000;
+    let width = 0;
+    let height = 0;
+    let pixelRatio = 1;
+    let startedAt = performance.now();
+    let stones = [];
+    let flowers = [];
+
+    function colorChannels(color) {
+      const value = color.trim();
+      const rgb = value.match(/^rgba?\(\s*([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)/i);
+      if (rgb) {
+        return {
+          r: Number(rgb[1]),
+          g: Number(rgb[2]),
+          b: Number(rgb[3])
+        };
+      }
+
+      const hex = value.replace('#', '');
+      const normalized = hex.length === 3 ? hex.split('').map((part) => part + part).join('') : hex;
+      return {
+        r: parseInt(normalized.slice(0, 2), 16),
+        g: parseInt(normalized.slice(2, 4), 16),
+        b: parseInt(normalized.slice(4, 6), 16)
+      };
+    }
+
+    function rgba(color, alpha) {
+      const {
+        r,
+        g,
+        b
+      } = colorChannels(color);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function mix(first, second, amount) {
+      const a = colorChannels(first);
+      const b = colorChannels(second);
+      const t = Math.max(0, Math.min(1, amount));
+      return `rgb(${Math.round(a.r + (b.r - a.r) * t)}, ${Math.round(a.g + (b.g - a.g) * t)}, ${Math.round(a.b + (b.b - a.b) * t)})`;
+    }
+
+    function smoothstep(start, end, value) {
+      const amount = Math.max(0, Math.min(1, (value - start) / (end - start)));
+      return amount * amount * (3 - 2 * amount);
+    }
+
+    function heartPoint(progress, centerX, centerY, size) {
+      const angle = progress * Math.PI * 2;
+      const x = 16 * Math.pow(Math.sin(angle), 3);
+      const y = 13 * Math.cos(angle) - 5 * Math.cos(2 * angle) - 2 * Math.cos(3 * angle) - Math.cos(4 * angle);
+      return {
+        x: centerX + (x / 32) * size,
+        y: centerY - (y / 30) * size
+      };
+    }
+
+    function heartLayout() {
+      const size = Math.min(width * 0.47, height * 0.27, 230);
+      return {
+        centerX: width * 0.5,
+        centerY: height * 0.77,
+        size
+      };
+    }
+
+    function buildScene() {
+      stones = [];
+      flowers = [];
+      const count = 48;
+
+      for (let index = 0; index < count; index += 1) {
+        const progress = index / count;
+        const point = heartPoint(progress, 0, 0, 1);
+        const scatterAngle = index * 2.399963;
+        const scatterRadius = 0.12 + ((index * 37) % 100) / 100 * 0.28;
+        stones.push({
+          heartX: point.x,
+          heartY: point.y,
+          scatterX: Math.cos(scatterAngle) * scatterRadius,
+          scatterY: Math.sin(scatterAngle) * scatterRadius,
+          size: 3.5 + ((index * 17) % 10) * 0.48,
+          rotation: ((index * 23) % 100) / 100 * Math.PI,
+          shell: index % 5 === 1 || index % 7 === 0,
+          tone: ((index * 29) % 100) / 100
+        });
+      }
+
+      const placements = [
+        [0.12, 0.70, true],
+        [0.22, 0.84, false],
+        [0.32, 0.62, true],
+        [0.70, 0.64, false],
+        [0.82, 0.83, true],
+        [0.91, 0.69, false],
+        [0.08, 0.90, false],
+        [0.92, 0.91, true]
+      ];
+      flowers = placements.map(([x, y, lily], index) => ({
+        x,
+        y,
+        lily,
+        scale: 0.72 + (index % 3) * 0.15,
+        rotation: index * 0.63
+      }));
+    }
+
+    function resizeCanvas() {
+      pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.round(width * pixelRatio);
+      canvas.height = Math.round(height * pixelRatio);
+      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      buildScene();
+    }
+
+    function shorelineY(x, time, baseY, amplitude) {
+      const broad = Math.sin((x / Math.max(width, 1)) * Math.PI * 2 + time * 0.00035) * 12;
+      const ripples = Math.sin(x * 0.012 + time * 0.001) * 3.5 + Math.sin(x * 0.025 - time * 0.0007) * 2;
+      return baseY + broad + ripples + amplitude * Math.sin(x * 0.006 + time * 0.0005);
+    }
+
+    function drawSand() {
+      const shoreTop = height * 0.49;
+      const sand = context.createLinearGradient(0, shoreTop, 0, height);
+      sand.addColorStop(0, colors.sandLight);
+      sand.addColorStop(1, colors.sand);
+      context.fillStyle = sand;
+      context.fillRect(0, shoreTop, width, height - shoreTop);
+
+      const sheen = context.createLinearGradient(0, shoreTop, 0, height);
+      sheen.addColorStop(0, rgba(colors.foam, 0.07));
+      sheen.addColorStop(0.55, rgba(colors.foam, 0.015));
+      sheen.addColorStop(1, rgba(colors.foam, 0));
+      context.fillStyle = sheen;
+      context.fillRect(0, shoreTop, width, height - shoreTop);
+    }
+
+    function drawWetSand(reveal) {
+      if (reveal <= 0.02) return;
+      const {
+        centerX,
+        centerY,
+        size
+      } = heartLayout();
+      context.save();
+      context.globalAlpha = reveal;
+
+      // A soft reflective patch, without any outline or traveling light trail.
+      const gloss = context.createRadialGradient(centerX, centerY, size * 0.08, centerX, centerY, size * 1.15);
+      gloss.addColorStop(0, rgba(colors.light, 0.12));
+      gloss.addColorStop(0.58, rgba(colors.foam, 0.055));
+      gloss.addColorStop(1, rgba(colors.foam, 0));
+      context.fillStyle = gloss;
+      context.beginPath();
+      context.ellipse(centerX, centerY, size * 1.04, size * 0.78, 0, 0, Math.PI * 2);
+      context.fill();
+      context.restore();
+    }
+
+    function stonePosition(stone, reveal) {
+      const {
+        centerX,
+        centerY,
+        size
+      } = heartLayout();
+      const scatterScale = size * 1.62;
+      const settle = smoothstep(0.04, 0.94, reveal);
+      return {
+        x: centerX + stone.scatterX * scatterScale + (stone.heartX * size * 0.91 - stone.scatterX * scatterScale) * settle,
+        // heartY already has its canvas direction: adding it keeps the point facing down.
+        y: centerY + stone.scatterY * scatterScale + (stone.heartY * size * 0.91 - stone.scatterY * scatterScale) * settle
+      };
+    }
+
+    function drawStone(stone, point) {
+      const radius = stone.size * (width < 600 ? 0.78 : 1);
+      const palette = stone.shell ? [colors.accent, colors.lily, colors.foam] : [colors.deep, colors.ocean, colors.text];
+      const base = mix(palette[0], palette[1], stone.tone);
+      const gradient = context.createRadialGradient(point.x - radius * 0.35, point.y - radius * 0.42, radius * 0.08, point.x, point.y, radius * 1.2);
+      gradient.addColorStop(0, mix(base, colors.foam, 0.64));
+      gradient.addColorStop(0.45, base);
+      gradient.addColorStop(1, mix(base, colors.text, 0.45));
+
+      context.save();
+      context.translate(point.x, point.y);
+      context.rotate(stone.rotation);
+      context.shadowColor = rgba(colors.text, 0.45);
+      context.shadowBlur = radius * 0.8;
+      context.shadowOffsetY = radius * 0.5;
+      context.fillStyle = gradient;
+
+      if (stone.shell) {
+        context.beginPath();
+        context.moveTo(-radius, radius * 0.55);
+        context.quadraticCurveTo(-radius * 1.1, -radius * 0.48, 0, -radius * 0.94);
+        context.quadraticCurveTo(radius * 1.12, -radius * 0.4, radius, radius * 0.55);
+        context.quadraticCurveTo(0, radius * 0.98, -radius, radius * 0.55);
+        context.fill();
+        context.shadowColor = 'transparent';
+        context.strokeStyle = rgba(colors.foam, 0.58);
+        context.lineWidth = Math.max(0.7, radius * 0.12);
+        for (let ridge = -2; ridge <= 2; ridge += 1) {
+          context.beginPath();
+          context.moveTo(ridge * radius * 0.25, radius * 0.66);
+          context.quadraticCurveTo(ridge * radius * 0.2, -radius * 0.05, ridge * radius * 0.1, -radius * 0.7);
+          context.stroke();
+        }
+      } else {
+        context.beginPath();
+        context.ellipse(0, 0, radius * 1.22, radius * 0.83, 0, 0, Math.PI * 2);
+        context.fill();
+        context.shadowColor = 'transparent';
+        context.fillStyle = rgba(colors.foam, 0.3);
+        context.beginPath();
+        context.ellipse(-radius * 0.3, -radius * 0.28, radius * 0.38, radius * 0.15, -0.35, 0, Math.PI * 2);
+        context.fill();
+      }
+      context.restore();
+    }
+
+    function drawFlowers() {
+      flowers.forEach((flower) => {
+        const x = flower.x * width;
+        const y = flower.y * height;
+        const scale = flower.scale * (width < 600 ? 0.72 : 1);
+        const petalColor = flower.lily ? colors.lily : colors.rose;
+        context.save();
+        context.translate(x, y);
+        context.rotate(flower.rotation);
+        context.scale(scale, scale);
+        context.globalAlpha = 0.92;
+        context.strokeStyle = rgba(colors.leaf, 0.9);
+        context.lineWidth = 2;
+        context.beginPath();
+        context.moveTo(0, 7);
+        context.quadraticCurveTo(-8, 18, -17, 21);
+        context.moveTo(0, 13);
+        context.quadraticCurveTo(8, 18, 16, 16);
+        context.stroke();
+        context.fillStyle = colors.leaf;
+        context.beginPath();
+        context.ellipse(-11, 18, 7, 3, -0.5, 0, Math.PI * 2);
+        context.ellipse(11, 16, 7, 3, 0.4, 0, Math.PI * 2);
+        context.fill();
+
+        for (let petal = 0; petal < 6; petal += 1) {
+          context.save();
+          context.rotate((Math.PI * 2 * petal) / 6);
+          context.fillStyle = petalColor;
+          context.beginPath();
+          context.ellipse(0, flower.lily ? -8 : -7, flower.lily ? 3.7 : 5.2, flower.lily ? 9 : 7, 0, 0, Math.PI * 2);
+          context.fill();
+          context.restore();
+        }
+        context.fillStyle = flower.lily ? colors.accent : colors.lily;
+        context.beginPath();
+        context.arc(0, 0, 3.5, 0, Math.PI * 2);
+        context.fill();
+        context.restore();
+      });
+    }
+
+    function drawWater(time, edgeY, strength) {
+      const water = context.createLinearGradient(0, 0, 0, edgeY + 110);
+      water.addColorStop(0, colors.deep);
+      water.addColorStop(0.66, colors.ocean);
+      water.addColorStop(1, colors.light);
+      context.fillStyle = water;
+      context.beginPath();
+      context.moveTo(0, 0);
+      context.lineTo(width, 0);
+      for (let x = width; x >= 0; x -= 7) {
+        context.lineTo(x, shorelineY(x, time, edgeY, 8));
+      }
+      context.closePath();
+      context.fill();
+
+      for (let row = 0; row < 7; row += 1) {
+        const y = height * (0.07 + row * 0.052);
+        context.beginPath();
+        for (let x = 0; x <= width + 4; x += 6) {
+          const ripple = Math.sin(x * 0.008 + time * 0.00065 + row * 0.8) * 4 + Math.sin(x * 0.018 - time * 0.0009 + row) * 2;
+          if (x === 0) context.moveTo(x, y + ripple);
+          else context.lineTo(x, y + ripple);
+        }
+        context.strokeStyle = rgba(colors.foam, 0.035 + (row % 3) * 0.014);
+        context.lineWidth = row % 2 === 0 ? 1.6 : 1;
+        context.stroke();
+      }
+
+      context.beginPath();
+      for (let x = 0; x <= width + 4; x += 5) {
+        const y = shorelineY(x, time, edgeY, 8);
+        if (x === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+      }
+      context.strokeStyle = rgba(colors.foam, 0.4 + strength * 0.25);
+      context.lineWidth = 3 + strength * 4;
+      context.shadowColor = colors.foam;
+      context.shadowBlur = 9 + strength * 7;
+      context.stroke();
+      context.shadowBlur = 0;
+    }
+
+    function draw(now) {
+      const elapsed = reducedMotion.matches ? cycleLength * 0.78 : now - startedAt;
+      const cycle = Math.floor(elapsed / cycleLength);
+      const phase = (elapsed % cycleLength) / cycleLength;
+      const shoreBase = height * 0.505;
+      const firstPass = cycle === 0 && !reducedMotion.matches;
+      let strength;
+      let edgeY;
+      let reveal;
+
+      if (firstPass) {
+        const incoming = smoothstep(0.02, 0.38, phase);
+        const receding = smoothstep(0.40, 0.76, phase);
+        strength = phase < 0.42 ? incoming : 1 - receding;
+        // The first tide reaches almost the bottom edge, covering every scattered stone and shell.
+        edgeY = shoreBase + height * 0.55 * strength;
+        // The heart settles into place only as that first wave retreats.
+        reveal = smoothstep(0.43, 0.76, phase);
+      } else {
+        const gentlePhase = (phase + 0.12) % 1;
+        const incoming = smoothstep(0.04, 0.5, gentlePhase);
+        const receding = smoothstep(0.53, 0.96, gentlePhase);
+        strength = gentlePhase < 0.54 ? incoming : 1 - receding;
+        edgeY = shoreBase + height * (0.035 + strength * 0.09);
+        reveal = 1;
+      }
+
+      context.clearRect(0, 0, width, height);
+      drawSand();
+      drawWetSand(reveal);
+      drawFlowers();
+      context.save();
+      context.globalAlpha = 1 - strength * 0.22;
+      stones.forEach((stone) => drawStone(stone, stonePosition(stone, Math.max(reveal, 0.025))));
+      context.restore();
+      drawWater(now, edgeY, strength);
+
+      if (!reducedMotion.matches) requestAnimationFrame(draw);
+    }
+
+    replayButton.addEventListener('click', () => {
+      startedAt = performance.now();
+      if (reducedMotion.matches) draw(performance.now());
+    });
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    if (reducedMotion.matches) {
+      draw(performance.now());
+    } else {
+      requestAnimationFrame(draw);
+    }
+
+  </script>
+</body>
+
+</html>
